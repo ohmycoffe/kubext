@@ -16,11 +16,7 @@ from portfwd.models import (
 from portfwd.utils import find_free_port, is_port_free
 
 
-def resolve_remote_port(remote_port: int | None, service: KubernetesService) -> int:
-    # If remote port is explicitly specified in the spec, use it
-    if remote_port is not None:
-        return int(remote_port)
-
+def resolve_remote_port(service: KubernetesService) -> int:
     ports = [p.port for p in service.ports]
 
     # If there are multiple ports, we cannot guess which one to use
@@ -72,16 +68,20 @@ def build_port_forward_plan(
     if not service:
         raise KubernetesResourceNotFoundError(f"Service '{ns}/{name}' not found")
 
-    remote_port = resolve_remote_port(spec.remote_port, service)
+    # Assign a remote port
+    # If remote port is explicitly specified in the spec, use it
+    if spec.remote_port is not None:
+        remote_port = int(spec.remote_port)
+    else:
+        remote_port = resolve_remote_port(service)
+
+    # Assign a local port
     # If local port is explicitly specified in the spec, use it
     if spec.local_port is not None:
         local_port = int(spec.local_port)
     else:
         local_port = resolve_local_port(
-            name=name,
-            namespace=ns,
-            remote_port=remote_port,
-            config=config,
+            name=name, namespace=ns, remote_port=remote_port, config=config
         )
 
     return ServicePortForwardPlan(

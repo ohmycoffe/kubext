@@ -21,7 +21,6 @@ from portfwd.kube import (
     KubernetesService,
     get_available_namespaces,
     get_current_context,
-    get_service,
 )
 from portfwd.models import (
     NamespacedServiceName,
@@ -47,41 +46,6 @@ app = typer.Typer()
 
 
 console = get_console()
-
-
-def __resolve_services(qualnames: list) -> list[KubernetesService]:
-    """Look up each service by exact name in its namespace.
-
-    Hard-fails on missing services or kubectl errors, distinguishing the two cases.
-    """
-    result: list[KubernetesService] = []
-    not_found: list[str] = []
-    duplicated: list[str] = []
-    try:
-        with console.status(fmt.ongoing_status("Fetching services…")):
-            for q in qualnames:
-                svc = get_service(q.namespace, q.name)
-                if not svc:
-                    not_found.append(f"{q}")
-                elif len(svc) > 1:
-                    duplicated.append(str(q))
-                else:
-                    result.append(svc[0])
-    except subprocess.CalledProcessError as e:
-        print_error(e, "Failed to fetch service using kubectl")
-        raise typer.Exit(code=1) from None
-    if not_found:
-        console.print(fmt.error(f"Services not found: {', '.join(not_found)}"))
-        raise typer.Exit(code=1)
-    if duplicated:
-        console.print(
-            fmt.error(f"Services with multiple ports: {', '.join(duplicated)}")
-        )
-        # todo: change me
-        # needs proper implementation
-        # of service selection when multiple ports are present
-        raise typer.Exit(code=1)
-    return result
 
 
 def __fetch_services_for_namespaces(namespaces: list[str]) -> list[KubernetesService]:
