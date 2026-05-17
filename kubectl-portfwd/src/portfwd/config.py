@@ -1,27 +1,17 @@
 from __future__ import annotations
 
 import logging
-import os
-import tomllib
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field
+from ruamel.yaml import YAML
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_CONFIG_PATH = (
-    Path(
-        os.environ.get(
-            "XDG_CONFIG_HOME",
-            Path.home() / ".config",
-        )
-    )
-    / "kpf"
-    / "config.toml"
-)
+DEFAULT_CONFIG_PATH = Path.home() / ".kube" / "portfwd"
 
 
-class ServiceConfig(BaseModel):
+class ServicePortForwardDefaults(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1)
@@ -30,36 +20,69 @@ class ServiceConfig(BaseModel):
     local_port: int = Field(ge=1, le=65535)
 
 
-class Config(BaseModel):
+class GroupSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    default_namespace: str | None = None
-    ports: list[ServiceConfig] = []
+    name: str
+    services: list[ServicePortForwardDefaults] = Field(default_factory=list)
 
 
-def load_config(path: Path | None) -> Config:
+class PortFwdConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    defaults: list[ServicePortForwardDefaults] = Field(default_factory=list)
+    groups: list[GroupSpec] = Field(default_factory=list)
+
+
+def get_default_service(
+    config: PortFwdConfig,
+    name: str,
+    namespace: str,
+    remote_port: int,
+) -> ServicePortForwardDefaults | None:
+    candidates = [
+        entry
+        for entry in config.defaults
+        if (
+            entry.name == name
+            and entry.namespace == namespace
+            and entry.remote_port == remote_port
+        )
+    ]
+    # if multiple defaults match, use the last one.
+    return candidates[-1] if candidates else None
+
+
+def get_group(cfg: PortFwdConfig, name: str) -> GroupSpec | None:
+    for group in cfg.groups:
+        if group.name == name:
+            return group
+    return None
+
+
+def load_config(path: Path | None) -> PortFwdConfig:
     if path is None:
         path = DEFAULT_CONFIG_PATH
 
-    default_config = Config()
-
     if not path.exists():
-        logger.debug("No config file found at %s, using defaults", path)
-        return default_config
+        logger.debug("No config file found at %s, using empty config", path)
+        return PortFwdConfig()
 
-    with path.open("rb") as f:
-        data = tomllib.load(f)
+    yaml = YAML(typ="safe")
     try:
-        config = Config.model_validate(data)
+        with path.open(encoding="utf-8") as f:
+            root = yaml.load(f)
+        if not isinstance(root, dict):
+            logger.warning(
+                "Config at %s has unexpected structure, using empty config", path
+            )
+            return PortFwdConfig()
         logger.info("Loaded config from %s", path)
-        return config
-    except ValidationError as e:
-        logger.warning(
-            "Failed to parse config file at %s. Using defaults instead. "
-            "To fix this, ensure your config file is valid TOML "
-            "and matches the expected schema.",
-            path,
-        )
-        logger.warning("%s", e)
+        return PortFwdConfig.model_validate(root)
+    except Exception as e:
+        logger.warning("Failed to load config from %s: %s, using empty config", path, e)
+        return PortFwdConfig()
 
-        return default_config
+
+if __name__ == "__main__":
+    cfg = load_config(Path("portfwd"))
+    print(cfg)

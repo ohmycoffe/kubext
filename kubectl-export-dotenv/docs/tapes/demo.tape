@@ -1,4 +1,4 @@
-Output demo-kubectl-envx.gif
+Output demo-kubectl-export-dotenv.gif
 
 Set Theme "GitHub Dark"
 Set FontSize 16
@@ -10,12 +10,14 @@ Set CursorBlink false
 Set Padding 20
 
 Hide
+Type "kubectl config set-context --current --namespace=ns-kubectl-export-dotenv"
+Enter
 Type "clear"
 Enter
 Sleep 300ms
 Show
 
-Type "kubectl envx"
+Type "kubectl export-dotenv"
 Sleep 2s
 Enter
 Sleep 2s
@@ -24,12 +26,6 @@ Sleep 2s
 Enter
 Sleep 2s
 
-# Select namespace
-Type "ns-"
-Sleep 600ms
-Enter
-Sleep 3s
-
 # Select resource
 Enter
 Sleep 3s
@@ -37,4 +33,6 @@ Sleep 3s
 Ctrl+C
 Sleep 600ms
 Type clear
+Sleep 600ms
+Enter
 Sleep 1s

@@ -3,25 +3,26 @@ from __future__ import annotations
 import logging
 import subprocess
 
-from rich.console import Console
 from rich.panel import Panel
+from rich.text import Text
 
-from envx.style import COLOR_ERROR
-
-console = Console(stderr=True)
+from kubek.term.console import get_console
+from kubek.term.style import Color, Icon, RichStyle
 
 logger = logging.getLogger(__name__)
 
 
+console = get_console()
+
+
 def print_error(e: subprocess.CalledProcessError, msg: str) -> None:
-    logger.debug("kubectl error", exc_info=e, stack_info=True)
     stderr = (e.stderr or "no output").strip()
     stdout = (e.stdout or "no output").strip()
     cmd = " ".join(e.cmd)
     content = "\n".join(
         [
             "[dim]stderr:[/dim]",
-            f"[{COLOR_ERROR}]{stderr}[/]",
+            f"[{Color.ERROR}]{stderr}[/]",
             "",
             "[dim]stdout:[/dim]",
             stdout,
@@ -33,8 +34,18 @@ def print_error(e: subprocess.CalledProcessError, msg: str) -> None:
     console.print(
         Panel(
             content,
-            title=f"[bold {COLOR_ERROR}]{msg}[/]",
-            border_style=COLOR_ERROR,
+            title=Text(f"{Icon.FATAL} {msg}", style=RichStyle.ERROR),
+            border_style=Color.ERROR,
             expand=False,
         )
     )
+
+
+if __name__ == "__main__":
+    # Example usage
+    try:
+        subprocess.run(
+            ["ls", "/nonexistent"], check=True, capture_output=True, text=True
+        )
+    except subprocess.CalledProcessError as e:
+        print_error(e, "Failed to list directory")
