@@ -5,27 +5,29 @@ import json
 import subprocess
 from typing import Annotated
 
+import kubek.term.format as fmt
 import questionary
 import typer
+from kubek.kube import DEFAULT_NAMESPACE, get_current_namespace
+from kubek.term import STYLE_QUESTIONARY, get_console, print_error
 
-from envx.console import console, print_error
-from envx.kube import (
+from export_dotenv.kube import (
     get_available_deployments,
-    get_available_namespaces,
     get_available_workflowtemplates,
     get_deployment_envs,
     get_workflowtemplate_envs,
 )
-from envx.style import COLOR_MUTED, STYLE
-from envx.utils import export_as_dotenv, resolve_namespace, setup_logging
+from export_dotenv.utils import export_as_dotenv, setup_logging
+
+console = get_console()
 
 
-class ResourceKind(str, enum.Enum):
+class ResourceKind(enum.StrEnum):
     DEPLOYMENT = "deployment"
     WORKFLOWTEMPLATE = "workflowtemplate"
 
 
-class ExportFormat(str, enum.Enum):
+class ExportFormat(enum.StrEnum):
     ENV = "env"
     JSON = "json"
 
@@ -33,7 +35,7 @@ class ExportFormat(str, enum.Enum):
 app = typer.Typer()
 
 
-def select_resource_kind() -> ResourceKind:
+def ask_for_kind() -> ResourceKind:
     selected = questionary.select(
         "Select a kind:",
         choices=[
@@ -49,11 +51,21 @@ def select_resource_kind() -> ResourceKind:
             ),
         ],
         use_jk_keys=False,
-        style=STYLE,
+        style=STYLE_QUESTIONARY,
     ).ask()
-    if not selected:
-        raise typer.Exit(code=0)
+
     return ResourceKind(selected)
+
+
+def ask_for_resource(resources: list[str], kind: ResourceKind) -> str:
+    selected = questionary.select(
+        f"Select a {kind.value}:",
+        choices=resources,
+        use_search_filter=True,
+        use_jk_keys=False,
+        style=STYLE_QUESTIONARY,
+    ).ask()
+    return selected
 
 
 @app.callback(invoke_without_command=True)
@@ -67,7 +79,6 @@ def get(
     namespace: Annotated[
         str | None,
         typer.Option(
-            envvar="KENVX_NAMESPACE",
             help="Kubernetes namespace. If not provided, you will be prompted to select one.",
         ),
     ] = None,
@@ -89,21 +100,23 @@ def get(
     Get environment variables for a Kubernetes deployment or Argo WorkflowTemplate.
     """
     setup_logging(verbose)
-    if kind is None:
-        kind = select_resource_kind()
+
+    kind = kind or ask_for_kind()
+
+    if not kind:
+        raise typer.Exit(code=0)
 
     try:
-        with console.status(f"[italic {COLOR_MUTED}]Fetching available namespaces…[/]"):
-            namespaces = get_available_namespaces()
+        namespace = namespace or get_current_namespace() or DEFAULT_NAMESPACE
     except subprocess.CalledProcessError as e:
-        print_error(e, "Failed to fetch available namespaces")
+        print_error(e, "Failed to get current namespace from kubeconfig")
         raise typer.Exit(code=1) from None
 
-    namespace = resolve_namespace(namespace, available_namespaces=namespaces)
+    console.print("Namespace:", fmt.highlight(namespace))
 
     try:
         with console.status(
-            f"[italic {COLOR_MUTED}]Fetching available {kind.value}s in {namespace}…[/]"
+            fmt.ongoing_status(f"Fetching available {kind.value}s in {namespace}…")
         ):
             if kind == ResourceKind.DEPLOYMENT:
                 resources = get_available_deployments(namespace=namespace)
@@ -115,30 +128,22 @@ def get(
         )
         raise typer.Exit(code=1) from None
     if not resources:
-        console.print(f"[red]Error: no {kind.value}s found in namespace '{namespace}'")
+        console.print(fmt.error(f"No {kind.value}s found in namespace '{namespace}'"))
         raise typer.Exit(code=1)
 
     if not name:
-        name = questionary.select(
-            f"Select a {kind.value}:",
-            choices=resources,
-            use_search_filter=True,
-            use_jk_keys=False,
-            style=STYLE,
-        ).ask()
+        name = ask_for_resource(resources=resources, kind=kind)
         if not name:
             raise typer.Exit(code=0)
 
     if name not in resources:
         console.print(
-            f"[red]Error:[/red] {kind.value} '{name}' not found in namespace '{namespace}'."
+            fmt.error(f"{kind.value} '{name}' not found in namespace '{namespace}'")
         )
         raise typer.Exit(code=1)
 
     try:
-        with console.status(
-            f"[italic {COLOR_MUTED}]Fetching environment variables…[/]"
-        ):
+        with console.status(fmt.ongoing_status("Fetching environment variables…")):
             if kind == ResourceKind.DEPLOYMENT:
                 vals = get_deployment_envs(namespace=namespace, name=name)
             else:
@@ -153,7 +158,3 @@ def get(
         formatted = export_as_dotenv(vals=vals, name=name)
     print(formatted)
     raise typer.Exit(code=0)
-
-
-if __name__ == "__main__":
-    app()

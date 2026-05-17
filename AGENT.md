@@ -4,9 +4,9 @@
 
 `kubek` is a Python 3.11+ monorepo of `kubectl` plugins. See each package's README for details:
 - `kubectl-portfwd/README.md` — interactive multi-service port-forwarding
-- `kubectl-envx/README.md` — export env vars from Kubernetes Deployments and Argo WorkflowTemplates
+- `kubectl-export-dotenv/README.md` — export env vars from Kubernetes Deployments and Argo WorkflowTemplates
 
-Shared library lives in `kubek-shared/src/kubek/`. 
+Shared library lives in `kubek-shared/src/kubek/`.
 
 ## Rules
 
