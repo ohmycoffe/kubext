@@ -6,6 +6,8 @@
 kubectl portfwd                                            # interactive: pick group or services
 kubectl portfwd -g backend                                 # run a predefined service group
 kubectl portfwd -s kube-public/auth-service                # forward a single service
+kubectl portfwd -s kube-public/auth-service:8080           # specify remote port explicitly
+kubectl portfwd -s kube-public/auth-service:8080::50000    # specify remote and local ports
 kubectl portfwd -s kube-public/auth-service -s kube-public/user-service  # forward multiple services
 kubectl portfwd -c ~/.kube/portfwd                         # use a specific config file
 kubectl portfwd -v / -vv                                   # INFO / DEBUG logging
@@ -48,6 +50,8 @@ When a config is present the CLI shows a group picker in interactive mode:
 ```
 
 If no config file exists, the tool falls back to kubectl service discovery (namespace prompt → service checkbox).
+
+The `--service` / `-s` flag accepts the format `[namespace/]name[:remote_port][::local_port]`. Remote and local ports are optional — if omitted, the config defaults are used, or a free port is chosen automatically.
 
 Option precedence: CLI flag → `KUBEK_PORTFWD_CONFIG` env var → default path.
 

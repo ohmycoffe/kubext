@@ -197,7 +197,7 @@ def port_forward(
         typer.Option(
             "--service",
             "-s",
-            help="Service to forward (namespace/name). Can be specified multiple times.",
+            help="Service to forward in the format \\[namespace/]name\\[:remote_port]\\[::local_port]. Can be specified multiple times.",
         ),
     ] = None,
     verbose: Annotated[
@@ -210,7 +210,17 @@ def port_forward(
         ),
     ] = 0,
 ) -> None:
-    """Interactive kubectl port-forward for Kubernetes services."""
+    """Interactive kubectl port-forward for Kubernetes services.
+
+    \b
+    Examples:
+        kubectl portfwd
+        kubectl portfwd -g backend
+        kubectl portfwd -s kube-public/auth-service
+        kubectl portfwd -s kube-public/auth-service:8080
+        kubectl portfwd -s kube-public/auth-service:8080::50000
+        kubectl portfwd -s kube-public/auth -s kube-public/api
+    """
 
     __setup_logging(verbose)
 
